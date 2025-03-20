@@ -25,18 +25,6 @@ static std::string s_trafficTraceFile = "traffic-trace.tr";
 static std::string s_positionTraceFile = "position-trace.tr";
 static std::string s_handoverTraceFile = "handover-trace.tr";
 
-
-/**
- * Example of the ORAN models.
- *
- * The scenario consists of an LTE UE moving back and forth
- * between 2 LTE eNBs. The LTE UE reports to the RIC its location
- * and current Cell ID. In the RIC, an LM will periodically check
- * the RSRP and RSRQ of UE, and if needed, issue a handover command.
- *
- * This example demonstrates how to configure processing delays for the LMs.
- */
-
 // Function that will save the traces of RX'd packets
 void
 RxTrace(Ptr<const Packet> p, const Address& from, const Address& to)
@@ -124,15 +112,7 @@ main(int argc, char* argv[])
     Time lmQueryInterval = Seconds(5);
     std::string dbFileName = "oran-repository.db";
     std::string lateCommandPolicy = "DROP";
-    // Carrier bandwidth in Hz
-    //double bandwidth = 20e6;
-    // Center frequency in Hz
-    //double centerFrequency = 3.5e9;
-    // Distance between the mmWave BSs and the two co-located LTE and mmWave BSs in meters
-    // Number of antennas in each UE
-    //int numAntennasMcUe = 1;
-    // Number of antennas in each mmWave BS
-    //int numAntennasMmWave = 1;
+
     // Command line arguments
     CommandLine cmd(__FILE__);
     cmd.AddValue("db-log", "Enable printing SQL queries results", dbLog);
@@ -267,8 +247,6 @@ main(int argc, char* argv[])
     Ipv4InterfaceContainer ueIpIfaces;
     ueIpIfaces = epcHelper->AssignUeIpv4Address(NetDeviceContainer(ueLteDevs));
     
-    //enbLteDevs.Get(0)->GetObject<LteEnbNetDevice>()->GetPhy()->SetChannel(channel);
-    //ueLteDevs.Get(0)->GetObject<LteUeNetDevice>()->GetPhy()->SetChannel(channel);
 
     // Attach all UEs to the first eNodeB
     for (uint16_t i = 0; i < numberOfUes; i++)
@@ -276,10 +254,6 @@ main(int argc, char* argv[])
         lteHelper->Attach(ueLteDevs.Get(i), enbLteDevs.Get(0));
     }
 
-    //generate data radio bearer(DL and UL)
-    //enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
-    //EpsBearer bearer(q);
-    //lteHelper->ActivateDataRadioBearer(ueLteDevs, bearer);
     
     // Add X2 interface
     lteHelper->AddX2Interface(enbNodes);
@@ -363,10 +337,7 @@ main(int argc, char* argv[])
     oranHelper->SetConflictMitigationModule("ns3::OranCmmNoop");
 
     nearRtRic = oranHelper->CreateNearRtRic();
-    //myLm->SetAttribute("NearRtRic",PointerValue(nearRtRic));
-    //myLm->SetAttribute("Verbose",BooleanValue(true));
-    //myLm->SetAttribute("ProcessingDelayRv",StringValue(processingDelayRv));
-    //nearRtRic->SetAttribute("DefaultLogicModule",PointerValue(myLm));
+
     // UE Nodes setup
     for (uint32_t idx = 0; idx < ueNodes.GetN(); idx++)
     {

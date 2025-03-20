@@ -171,7 +171,7 @@ MyLm::GetHandoverCommands(
 
     std::vector<Ptr<OranCommand>> commands;
     double myLoss=0;
-
+    int rx=0;
     for (auto ueInfo : ueInfos)
     {
         double max = -DBL_MAX;               
@@ -195,7 +195,6 @@ MyLm::GetHandoverCommands(
             //                     " in CellID " << std::to_string(ueInfo.cellId) <<
             //                     " to eNB with CellID " << std::to_string(cellId) << " is " +
             //                     std::to_string(rsrp)<<std::endl;
-
             if (rsrp > max + M) 
             {
                 // Record the new maximum

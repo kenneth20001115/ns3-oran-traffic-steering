@@ -19,7 +19,7 @@
 #include <stdlib.h>
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("NewOranHandoverUsingRSRPlm");
+NS_LOG_COMPONENT_DEFINE("NewOranHandoverUsingMylm");
 
 static std::string s_trafficTraceFile = "traffic-trace.tr";
 static std::string s_positionTraceFile = "position-trace.tr";

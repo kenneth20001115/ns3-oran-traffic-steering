@@ -11,12 +11,16 @@
 #include <ns3/propagation-delay-model.h>
 #include <ns3/three-gpp-propagation-loss-model.h>
 #include "ns3/point-to-point-module.h"
+#include <ns3/flow-monitor-module.h>
 
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <map>
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("NewOranHandoverUsingMylm");
@@ -60,6 +64,33 @@ void LogPosition(Ptr<OutputStreamWrapper> stream, Ptr<Node> node,  Ptr<const Mob
     *stream->GetStream() << Simulator::Now().GetSeconds() << "\t" << node->GetId()
                          << "\t" << pos.x << ", " << pos.y << ", " << pos.z << std::endl;
 }
+
+
+void LogEnbLoad(Ptr<LteEnbNetDevice> enbDevice) {
+
+    Ptr<LteEnbPhy> enbPhy = enbDevice->GetPhy();
+    std::vector<int> prbUse = enbPhy->GetDownlinkSubChannels();
+
+    std::cout << "Time: " << Simulator::Now().GetSeconds() << "s, eNodeB "<< enbDevice->GetCellId()<< " Used RBs: " << prbUse.size() << std::endl;
+    
+    Simulator::Schedule(Seconds(5.0), &LogEnbLoad, enbDevice);
+}
+
+void LogUeLoad(Ptr<LteUeNetDevice> ueDevice) {
+
+    Ptr<LteUePhy> uePhy = ueDevice->GetPhy();
+    std::vector<int> subChannels = uePhy->GetSubChannelsForTransmission();
+    std::cout << "UE"<<ueDevice->GetImsi()<<" Subchannels for Uplink Transmission: ";
+    for (int subChannel : subChannels)
+    {
+        std::cout << subChannel << " ";
+    }
+    std::cout << std::endl;
+    
+    Simulator::Schedule(Seconds(5.0), &LogUeLoad, ueDevice);
+}
+
+
 int handoverTime=0;
 void
 NotifyHandoverEndOkEnb(uint64_t imsi, uint16_t cellid, uint16_t rnti)
@@ -83,6 +114,8 @@ ReverseVelocity(NodeContainer nodes, Time interval)
     Simulator::Schedule(interval, &ReverseVelocity, nodes, interval);
 }
 
+
+
 void
 QueryRcSink(std::string query, std::string args, int rc)
 {
@@ -100,14 +133,14 @@ QueryRcSink(std::string query, std::string args, int rc)
 int
 main(int argc, char* argv[])
 {
-    uint16_t numberOfUes = 20;
+    uint16_t numberOfUes = 5;
     uint16_t numberOfEnbs = 4;
     Time simTime = Seconds(100);
-    Time maxWaitTime = Seconds(5); 
+    Time maxWaitTime = Seconds(100); 
     std::string processingDelayRv = "ns3::NormalRandomVariable[Mean=0.005|Variance=0.000031]";
     //double distance = 1375-625; // distance between eNBs
-    Time interval = Seconds(15);
-    double speed = 40; // speed of the ue
+    Time interval = Seconds(50);
+    double speed = 5; // speed of the ue
     bool dbLog = false;
     Time lmQueryInterval = Seconds(5);
     std::string dbFileName = "oran-repository.db";
@@ -163,7 +196,7 @@ main(int argc, char* argv[])
     Ptr<Ipv4StaticRouting> remoteHostStaticRouting =
         ipv4RoutingHelper.GetStaticRouting(remoteHost->GetObject<Ipv4>());
     remoteHostStaticRouting->AddNetworkRouteTo(Ipv4Address("7.0.0.0"), Ipv4Mask("255.0.0.0"), 1);
-    
+    lteHelper->SetEnbDeviceAttribute ("DlBandwidth", UintegerValue (25));
     /*---- Creating RAN nodes using NodeContainer ----*/
     NodeContainer ueNodes; 
     NodeContainer enbNodes;
@@ -178,12 +211,15 @@ main(int argc, char* argv[])
     positionAlloc->Add(Vector(625, 1125, 25));
     positionAlloc->Add(Vector(1375, 1125, 25));
     
-    
+    //srand(time(NULL));
+    srand(21);
         // Coordinates of the middle point between the eNBs, minus the distance covered
         // in half of the interval for switching directions
     for(int i=0;i<numberOfUes;i++){
         int x=rand()%(1000-625+1)+625;
         int y=rand()%(500-375+1)+375;
+        //int x=rand()%(1375-625)+625;
+        //int y=rand()%(1125-375)+375;
         positionAlloc->Add(Vector(x, y, 1.5));
     }
 
@@ -201,10 +237,10 @@ main(int argc, char* argv[])
         Ptr<ConstantVelocityMobilityModel> mobility =
             ueNodes.Get(idx)->GetObject<ConstantVelocityMobilityModel>();
         mobility->SetVelocity(Vector(speed*x, speed*(1-x), 0));
-        //mobility->SetVelocity(Vector(0, speed, 0));
+        //mobility->SetVelocity(Vector(0, 0, 0));
     }
     std::cout<<"position complete\n";
-    lteHelper->SetAttribute("PathlossModel",StringValue("ns3::ThreeGppUmiStreetCanyonPropagationLossModel"));
+    //lteHelper->SetAttribute("PathlossModel",StringValue("ns3::ThreeGppUmiStreetCanyonPropagationLossModel"));
     //lteHelper->SetPathlossModelAttribute("Environment",StringValue("Urban"));
     //Config::SetDefault("ns3::RadioBearerStatsCalculator::EpochDuration",TimeValue(Seconds(1.00)));
     //Config::SetDefault("ns3:LteUePhy::TxPower",DoubleValue(24));
@@ -228,9 +264,11 @@ main(int argc, char* argv[])
         Ptr<LteEnbNetDevice> enbLteDevice = device->GetObject<LteEnbNetDevice>();
         if (enbLteDevice) {
             Ptr<LteEnbPhy> enbPhy = enbLteDevice->GetPhy();
-            enbPhy->SetTxPower(30); // Set the transmission power to 30 dBm
+            enbPhy->SetTxPower(20); // Set the transmission power to 30 dBm
             enbPhy->SetNoiseFigure(6);
+            enbLteDevice->SetDlBandwidth(25);
         }
+        //Simulator::Schedule(Seconds(1.0), &LogEnbLoad, enbLteDevice);
     }
     for (NetDeviceContainer::Iterator it = ueLteDevs.Begin(); it != ueLteDevs.End(); ++it) {
         Ptr<NetDevice> device = *it;
@@ -239,6 +277,7 @@ main(int argc, char* argv[])
             Ptr<LteUePhy> uePhy = ueLteDevice->GetPhy();
             uePhy->SetTxPower(24);
             uePhy->SetNoiseFigure(6);
+            //Simulator::Schedule(Seconds(1.0), &LogUeLoad, ueLteDevice);
         }
     }
     std::cout<<"enb set complete\n";
@@ -251,7 +290,8 @@ main(int argc, char* argv[])
     // Attach all UEs to the first eNodeB
     for (uint16_t i = 0; i < numberOfUes; i++)
     {
-        lteHelper->Attach(ueLteDevs.Get(i), enbLteDevs.Get(0));
+        lteHelper->Attach(ueLteDevs.Get(i), enbLteDevs.Get(rand() % numberOfEnbs));
+        
     }
 
     
@@ -363,6 +403,7 @@ main(int argc, char* argv[])
                 MakeCallback(&ns3::OranReporterAppLoss::AddRx, appLossReporter));
         for (uint32_t netDevIdx = 0; netDevIdx < ueNodes.Get(idx)->GetNDevices(); netDevIdx++)
         {
+        
             Ptr<LteUeNetDevice> lteUeDevice = ueNodes.Get(idx)->GetDevice(netDevIdx)->GetObject<LteUeNetDevice>();
             if (lteUeDevice)
             {
@@ -376,28 +417,55 @@ main(int argc, char* argv[])
                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
         lteUeTerminator->SetAttribute("SendIntervalRv",
                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-
+        
         lteUeTerminator->AddReporter(locationReporter);
         lteUeTerminator->AddReporter(lteUeCellInfoReporter);
         lteUeTerminator->AddReporter(rsrpRsrqReporter);
         lteUeTerminator->AddReporter(appLossReporter);
         lteUeTerminator->Attach(ueNodes.Get(idx));
-
+        
         Simulator::Schedule(Seconds(1), &OranE2NodeTerminatorLteUe::Activate, lteUeTerminator);
     }
     
     // ENb Nodes setup
-    oranHelper->SetE2NodeTerminator("ns3::OranE2NodeTerminatorLteEnb",
-                                    "RegistrationIntervalRv",
-                                    StringValue("ns3::ConstantRandomVariable[Constant=1]"),
-                                    "SendIntervalRv",
-                                    StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    for (uint32_t idx = 0; idx < enbNodes.GetN(); idx++)
+    {
+        Ptr<OranReporterLocation> locationReporter = CreateObject<OranReporterLocation>();
+        Ptr<OranReporterDlScheduling> DlReporter = CreateObject<OranReporterDlScheduling>();
+        Ptr<OranE2NodeTerminatorLteEnb> lteEnbTerminator =
+            CreateObject<OranE2NodeTerminatorLteEnb>();
+   
+        locationReporter->SetAttribute("Terminator", PointerValue(lteEnbTerminator));
+        locationReporter->SetAttribute("Trigger", StringValue("ns3::OranReportTriggerPeriodic"));
+        DlReporter->SetAttribute("Terminator", PointerValue(lteEnbTerminator));
+        DlReporter->SetAttribute("Trigger", StringValue("ns3::OranReportTriggerPeriodic"));
+        
+        for (uint32_t netDevIdx = 0; netDevIdx < enbNodes.Get(idx)->GetNDevices(); netDevIdx++)
+        {
+        
+            Ptr<LteEnbNetDevice> lteEnbDevice = enbNodes.Get(idx)->GetDevice(netDevIdx)->GetObject<LteEnbNetDevice>();
+            if (lteEnbDevice)
+            {
+                Ptr<LteEnbMac> enbMac = lteEnbDevice->GetMac();
+                enbMac->TraceConnectWithoutContext("DlScheduling", MakeCallback(&ns3::OranReporterDlScheduling::ReportDlScheduling, DlReporter));
+            }
+        }
+        
+        lteEnbTerminator->SetAttribute("NearRtRic", PointerValue(nearRtRic));
+        lteEnbTerminator->SetAttribute("RegistrationIntervalRv",
+                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+        lteEnbTerminator->SetAttribute("SendIntervalRv",
+                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
 
-    oranHelper->AddReporter("ns3::OranReporterLocation",
-                            "Trigger",
-                            StringValue("ns3::OranReportTriggerPeriodic"));
 
-    e2NodeTerminatorsEnbs.Add(oranHelper->DeployTerminators(nearRtRic, enbNodes));
+        lteEnbTerminator->AddReporter(locationReporter);
+        lteEnbTerminator->AddReporter(DlReporter);
+        lteEnbTerminator->Attach(enbNodes.Get(idx));
+
+    
+        Simulator::Schedule(Seconds(1.5), &OranE2NodeTerminatorLteEnb::Activate, lteEnbTerminator);
+    }
+
 
     // DB logging to the terminal
     if (dbLog)
@@ -446,7 +514,7 @@ main(int argc, char* argv[])
         if (lteUeDevice)
         {
             Ptr<LteUePhy> uePhy = lteUeDevice->GetPhy();
-            uePhy->TraceConnectWithoutContext("ReportCurrentCellRsrpSinr", MakeBoundCallback(&LogRsrpRsrqSinr, rsrpSinrTrace));
+            //uePhy->TraceConnectWithoutContext("ReportCurrentCellRsrpSinr", MakeBoundCallback(&LogRsrpRsrqSinr, rsrpSinrTrace));
         }
     }
     std::cout<<"trace complete\n";
@@ -459,10 +527,100 @@ main(int argc, char* argv[])
     rlcStats->SetAttribute("StartTime",TimeValue(Seconds(0)));
     rlcStats->SetAttribute("EpochDuration",TimeValue(simTime));
     
+    FlowMonitorHelper flowmon;
+    Ptr<FlowMonitor> flowMonitor = flowmon.InstallAll();
+    std::map<Ipv4Address,int> ipue; 
     Simulator::Stop(simTime);
+     for (uint32_t idx = 0; idx < ueNodes.GetN(); idx++)
+    {
+    	uint64_t cellid=0;
+    	for (uint32_t netDevIdx = 0; netDevIdx < ueNodes.Get(idx)->GetNDevices(); netDevIdx++)
+        {
+        
+            Ptr<LteUeNetDevice> lteUeDevice = ueNodes.Get(idx)->GetDevice(netDevIdx)->GetObject<LteUeNetDevice>();
+            if (lteUeDevice)
+            {
+                Ptr<LteUeRrc> ueRrc = lteUeDevice->GetRrc();
+                cellid=ueRrc->GetImsi();
+            }
+         }
+    	Ptr<Ipv4> ipv4 = ueNodes.Get(idx)->GetObject<Ipv4>();
+	Ipv4InterfaceAddress iaddr = ipv4->GetAddress(1,0);  // LTE interface
+	Ipv4Address ipAddr = iaddr.GetLocal();
+	std::cout << "UE "<<cellid<<" IP Address: " << ipAddr << std::endl;
+	ipue[ipAddr]=cellid;
+    }
     Simulator::Run();
-
+     
+    flowMonitor->CheckForLostPackets();
+    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
+    std::map<FlowId, FlowMonitor::FlowStats> stats = flowMonitor->GetFlowStats();
+    Ipv4Address source("1.0.0.2");
+    double total=0;
+    int count=0;
+    std::ofstream outfile;
+    outfile.open("test.csv",std::ios::app);
+    
+   
+    std::vector<double> bitrate(20);
+    for (auto iter = stats.begin(); iter != stats.end(); ++iter) {
+      Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(iter->first);
+      if(t.sourceAddress==source){
+      count++;
+		  std::cout << "Flow ID: " << iter->first << " Src Addr " << t.sourceAddress << " --> Dst Addr " << t.destinationAddress << std::endl;
+		  std::cout << "  Tx Bytes: " << iter->second.txBytes << std::endl;
+		  std::cout << "  Rx Bytes: " << iter->second.rxBytes << std::endl;
+		  std::cout << "  Throughput: " << iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1e6 << " Mbps" << std::endl;
+		  total+= iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds()) / 1e6;
+		  bitrate[ipue[t.destinationAddress]-1]=iter->second.rxBytes * 8.0 / (iter->second.timeLastRxPacket.GetSeconds() - iter->second.timeFirstTxPacket.GetSeconds());
+      }
+   } 
+    for(int i=0;i<bitrate.size();i++){
+    	std::cout<<"ue "<<i+1<<" throughput "<<bitrate[i]/ 1e6<<std::endl;
+    	outfile<<bitrate[i]/ 1e6<<",";
+    }
+    std::cout<<"total throughput: "<<total/count<<std::endl;
+    outfile<<total/count<<"\n";
+    outfile.close();
     Simulator::Destroy();
     
     return 0;
 }
+/*
+// ENb Nodes setup
+    for (uint32_t idx = 0; idx < enbNodes.GetN(); idx++)
+    {
+        Ptr<OranReporterLocation> locationReporter = CreateObject<OranReporterLocation>();
+        Ptr<OranReporterUlScheduling> UlReporter = CreateObject<OranReporterUlScheduling>();
+        Ptr<OranE2NodeTerminatorLteEnb> lteEnbTerminator =
+            CreateObject<OranE2NodeTerminatorLteEnb>();
+   
+        locationReporter->SetAttribute("Terminator", PointerValue(lteEnbTerminator));
+        locationReporter->SetAttribute("Trigger", StringValue("ns3::OranReportTriggerPeriodic"));
+        UlReporter->SetAttribute("Terminator", PointerValue(lteEnbTerminator));
+        UlReporter->SetAttribute("Trigger", StringValue("ns3::OranReportTriggerPeriodic"));
+        
+        for (uint32_t netDevIdx = 0; netDevIdx < enbNodes.Get(idx)->GetNDevices(); netDevIdx++)
+        {
+        
+            Ptr<LteEnbNetDevice> lteEnbDevice = enbNodes.Get(idx)->GetDevice(netDevIdx)->GetObject<LteEnbNetDevice>();
+            if (lteEnbDevice)
+            {
+                Ptr<LteEnbMac> enbMac = lteEnbDevice->GetMac();
+                enbMac->TraceConnectWithoutContext("UlScheduling", MakeCallback(&ns3::OranReporterUlScheduling::ReportUlScheduling, UlReporter));
+            }
+        }
+        
+        lteEnbTerminator->SetAttribute("NearRtRic", PointerValue(nearRtRic));
+        lteEnbTerminator->SetAttribute("RegistrationIntervalRv",
+                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+        lteEnbTerminator->SetAttribute("SendIntervalRv",
+                                       StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+
+
+        lteEnbTerminator->AddReporter(locationReporter);
+        lteEnbTerminator->AddReporter(UlReporter);
+        lteEnbTerminator->Attach(enbNodes.Get(idx));
+
+    }
+    */

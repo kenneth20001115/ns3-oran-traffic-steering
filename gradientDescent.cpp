@@ -16,7 +16,7 @@ void VanillaGradientDescent::updateMb(){
   	return Mb;
   }
  double VanillaGradientDescent::gradient(double Tt){
-  	double g = (Tt-T)/10000;
+  	double g = (Tt-T)/dx;
   	std::cout<<"-----------\n"<<"g: "<<g<<std::endl;
   	std::cout<<"Tt: "<<Tt<<"T: "<<T<<std::endl;
   	return g;
@@ -27,5 +27,6 @@ void VanillaGradientDescent::updateMb(){
             return M;
         }
   	M = M-alpha * this->gradient(Tt);
+  	T=Tt;
   	return M;
   }

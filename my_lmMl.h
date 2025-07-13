@@ -1,14 +1,16 @@
-#ifndef MY_LM_H
-#define MY_LM_H
+#ifndef MY_LMML_H
+#define MY_LMML_H
 
 #include "ns3/oran-data-repository.h"
 #include "ns3/oran-lm.h"
 #include <ns3/vector.h>
 #include "gradientDescent.hpp"
+#include <map>
+#include <torch/script.h>
 namespace ns3
 {
 
-class MyLm : public OranLm
+class MyLmMl : public OranLm
 {
   protected:
     /**
@@ -20,8 +22,11 @@ class MyLm : public OranLm
         uint16_t cellId; //!< The cell ID.
         uint16_t rnti;   //!< The RNTI ID.
         double loss;     //!< The loss.
+        std::vector<double> rsrp;
         uint64_t Rx;     //!< Recieved packet
         uint64_t Tx;     //!< Transport packet
+        uint8_t mcs;     //!< MCS
+        uint16_t sizetb;
         Vector position; //!< The physical position.
     };
 
@@ -34,22 +39,22 @@ class MyLm : public OranLm
         uint16_t cellId; //!< The cell ID.
         Vector position; //!< The physical position.
     };
-
+    std::map <uint16_t, uint64_t> enbIdTrans;
   public:
     /**
-     * Gets the TypeId of the MyLm class.
+     * Gets the TypeId of the MyLmMl class.
      *
      * \return The TypeId.
      */
     static TypeId GetTypeId(void);
     /**
-     * Constructor of the MyLm class.
+     * Constructor of the MyLmMl class.
      */
-    MyLm(void);
+    MyLmMl(void);
     /**
-     * Destructor of the MyLm class.
+     * Destructor of the MyLmMl class.
      */
-    ~MyLm(void) override;
+    ~MyLmMl(void) override;
     /**
      * Runs the logic specific for this Logic Module. This will retrieve the
      * location of all LTE UEs and eNBs, find the closest eNB for each UE, and if
@@ -60,6 +65,7 @@ class MyLm : public OranLm
     std::vector<Ptr<OranCommand>> Run(void) override;
     
   private:
+     torch::jit::script::Module m_model;
      VanillaGradientDescent vgd;
      int runTime;
      double M;
@@ -74,8 +80,8 @@ class MyLm : public OranLm
      *
      * \return A vector of UE Information structures.
      */
-    std::vector<MyLm::UeInfo> GetUeInfos(
-        Ptr<OranDataRepository> data) const;
+    std::vector<MyLmMl::UeInfo> GetUeInfos(
+        Ptr<OranDataRepository> data, std::vector<MyLmMl::EnbInfo> enbinfos) const;
     /**
      * Method to get the eNB information from the repository.
      *
@@ -83,7 +89,7 @@ class MyLm : public OranLm
      *
      * \return A vector of eNB Information structures.
      */
-    std::vector<MyLm::EnbInfo> GetEnbInfos(
+    std::vector<MyLmMl::EnbInfo> GetEnbInfos(
         Ptr<OranDataRepository> data) const;
     /**
      * Method with the logic to get the distance between UEs and eNBs
@@ -97,10 +103,11 @@ class MyLm : public OranLm
      */
     std::vector<Ptr<OranCommand>> GetHandoverCommands(
         Ptr<OranDataRepository> data,
-        std::vector<MyLm::UeInfo> ueInfos,
-        std::vector<MyLm::EnbInfo> enbInfos) const;
-    double GetThroughput(std::vector<MyLm::UeInfo> ueInfos) const;
-    double GetLoss(std::vector<MyLm::UeInfo> ueInfos) const;
+        std::vector<MyLmMl::UeInfo> ueInfos,
+        std::vector<MyLmMl::EnbInfo> enbInfos,
+        double &tq);
+    double GetThroughput(std::vector<MyLmMl::UeInfo> ueInfos) const;
+    double GetLoss(std::vector<MyLmMl::UeInfo> ueInfos) const;
 };
 
 } // namespace ns3
